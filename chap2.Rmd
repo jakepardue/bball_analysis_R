@@ -1,0 +1,181 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Install proper packages
+```{r}
+library(tidyverse)
+library(BasketballAnalyzeR)
+library(gridExtra)
+RNGkind(sample.kind = "Rounding")
+PbP <- PbPmanipulation(PbP.BDB)
+```
+
+Section 2.2.1
+```{r}
+tm <- c("BOS","CLE","GSW","HOU")
+selTeams <- which(Tadd$team %in% tm)
+FF.sel <- fourfactors(Tbox[selTeams,], Obox[selTeams,])
+plot(FF.sel)
+#graph plots independently
+listPlots <- plot(FF.sel)
+grid.arrange(grobs=listPlots[3:4],ncol=1)
+#pace and ratings for whole league
+FF.league <- fourfactors(Tbox,Obox)
+listPlots <- plot(FF.league)
+grid.arrange(grobs=listPlots[1:2],ncol=1)
+```
+
+Section 2.2.2
+```{r}
+#barline plot for Western Conference
+X <- data.frame(Tbox,PTS.O=Obox$PTS,TOV.O=Obox$TOV,CONF=Tadd$Conference)
+XW <- subset(X,CONF=="W")
+labs <- c("Steals","Blocks","Defensive Rebounds")
+barline(data=XW,id="Team",bars = c("STL","BLK","DREB"),line="TOV.O",order.by="PTS.O",labels.bars = labs)
+
+#barline for Houston Rockets
+Pbox.HR <- subset(Pbox,Team=="Houston Rockets" & MIN>=500)
+barline(Pbox.HR,id="Player",bars = c("P2p","P3p","FTp"),line="MIN",order.by="PM",labels.bars = c("2p%","3p%","FT%"),title="Houston Rockets")
+
+Pbox.BOS <- subset(Pbox,Team=="Boston Celtics" & MIN>=500)
+barline(Pbox.BOS,id="Player",bars = c("P2p","P3p","FTp"),line="MIN",order.by="PM",labels.bars = c("2p%","3p%","FT%"),title="Boston Celtics")
+
+```
+
+Section 2.2.3
+```{r}
+#radial plots for 9 Point Guards
+Pbox.PG <- subset(Pbox, Player=="Russell Westbrook" |
+                    Player=="Stephen Curry" |
+                    Player=="Chris Paul" |
+                    Player=="Kyrie Irving" |
+                    Player=="Damian Lillard" |
+                    Player=="Kyle Lowry" |
+                    Player=="John Wall" |
+                    Player=="Rajon Rondo" |
+                    Player=="Kemba Walker")
+attach(Pbox.PG)
+X <- data.frame(P2M, P3M, FTM, REB=OREB+DREB, AST, STL, BLK)/MIN
+detach(Pbox.PG)
+radialprofile(data=X,title = Pbox.PG$Player,std=FALSE)
+#try std=TRUE
+radialprofile(data=X,title = Pbox.PG$Player,std=TRUE)
+
+```
+
+Section 2.2.4
+```{r}
+#Scatter plots
+Pbox.sel <- subset(Pbox, MIN>=500)
+attach(Pbox.sel)
+X <- data.frame(AST, TOV, PTS)/MIN
+detach(Pbox.sel)
+mypal <- colorRampPalette(c("blue","yellow","red"))
+scatterplot(X,data.var=c("AST","TOV"),z.var="PTS",labels=1:nrow(X),palette=mypal)
+#using names instead of numbers
+scatterplot(X,data.var=c("AST","TOV"),z.var="PTS",labels=Pbox.sel$Player,palette=mypal)
+SAS <- which(Pbox.sel$Team=="San Antonio Spurs")
+scatterplot(X,data.var=c("AST","TOV"),z.var="PTS",labels=Pbox.sel$Player,palette=mypal,subset=SAS)
+```
+
+Section 2.2.5
+```{r}
+attach(Tbox)
+X <- data.frame(T=Team,P2p,P3p,FTp,AS=P2A+P3A+FTA)
+detach(Tbox)
+labs <- c("2-point shots (% made)",
+            "3-point shots (% made)",
+            "free throws (% made)",
+            "Total shots attempted")
+bubbleplot(X,id="T",x="P2p",y="P3p",col="FTp",size="AS",labels=labs)
+#bubbles are scaled automatically, setting it to false
+bubbleplot(X,id="T",x="P2p",y="P3p",col="FTp",size="AS",labels=labs,scale.size = FALSE)
+#bubble plot for GSW and CC
+Pbox.GSW.CC <- subset(Pbox,(Team=="Golden State Warriors" | Team=="Cleveland Cavaliers") & MIN>=500)
+attach(Pbox.GSW.CC)
+X  <- data.frame(ID=Player,Team,V1=DREB/MIN,V2=STL/MIN,V3=BLK/MIN,V4=MIN)
+detach(Pbox.GSW.CC)
+labs <- c("Defensive Rebounds","Steals","Blocks","Total minutes played")
+bubbleplot(X,id="ID",x="V1",y="V2",col="V3",size="V4",text.col="Team",labels=labs,title="GSW and CC during the regular season",
+           text.legend=TRUE,text.size=3.5,scale=FALSE)
+
+```
+
+
+Section 2.2.6
+```{r}
+Pbox.OKC <- subset(Pbox,Team=="Oklahoma City Thunder" & MIN>=500)
+vrb1 <- variability(data=Pbox.OKC,data.var="P3p",size.var="P3A")
+plot(vrb1,title = "OKC 3 Pointers")
+
+#plotting all shot types
+vrb2 <- variability(data=Pbox.OKC,data.var=c("P2p","P3p","FTp"),size.var=c("P2A","P3A","FTA"),weight=TRUE)
+plot(vrb2,title="OKC Shots")
+```
+
+Section 2.2.7
+```{r}
+Pbox.BN <- subset(Pbox,Team=="Brooklyn Nets")
+ineq.BN <- inequality(Pbox.BN$PTS,nplayers=8)
+plot1 <- plot(ineq.BN,title="Lorenzo Curve for Brooklyn Nets")
+
+Pbox.MB <- subset(Pbox,Team=="Milwaukee Bucks")
+ineq.MB <- inequality(Pbox.MB$PTS,nplayers=8)
+plot2 <- plot(ineq.MB,title="Lorenz Curve for Milwaukee Bucks")
+grid.arrange(plot1,plot2,ncol=2)
+#finding gini index for every team and graph them
+nteams <- nrow(Tadd)
+INEQ <- array(0,nteams)
+for(i in 1:nteams){
+    team <- Tadd$Team[i]
+    Pbox.sel <- subset(Pbox,Team==team)
+    ineq <- inequality(Pbox.sel$PTS,nplayers=8)
+    INEQ[i] <- ineq$Gini
+}
+
+team_df <- data.frame(T=Tbox$Team,INEQ,PTS=Tbox$PTS,CONF=Tadd$Conference)
+scatterplot(team_df,data.var=c("INEQ","PTS"),z.var="CONF",labels=team_df$T,repel_labels = TRUE)
+#calculating inequality for GSW main lineup
+PbP.GSW <- subset(PbP,team=="GSW")
+lineup <- c("Stephen Curry", "Kevin Durant","Klay Thompson", "Draymond Green","Zaza Pachulia")
+filt5 <- apply(PbP.GSW[,4:13],1,function(x){
+    x <- as.character(x)
+    sum(x %in% lineup)==5
+})
+subPbP.GSW <- PbP.GSW[filt5,]
+PTS.GSW <- sapply(lineup,function(x){
+    filt <- subPbP.GSW$player==x
+    sum(subPbP.GSW$points[filt],na.rm=TRUE)
+})
+
+inequality(PTS.GSW,nplayers=5)
+```
+
+
+Section 2.2.8
+```{r}
+subdata <- subset(PbP,player=="Stephen Curry")
+subdata$xx <- subdata$original_x/10
+subdata$yy <- subdata$original_y/10 - 41.75
+shotchart(data=subdata,x="xx",y="yy",type=NULL,scatter=TRUE)
+#shotchart with colored dots based on made & missed
+shotchart(data=subdata,x="xx",y="yy",z="result",scatter=TRUE)
+#shotchart with colored backgrounds
+shotchart(data=subdata,x="xx",y="yy",z="playlength",type="sectors",num.sect=5,scatter=TRUE)
+#shotchart with no dots but FGp listed in each section
+shotchart(data=subdata,x="xx",y="yy",z="playlength",type="sectors",result="result",num.sect=5,scatter=FALSE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
